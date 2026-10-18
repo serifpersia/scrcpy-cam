@@ -19,6 +19,8 @@ int main() {
     Session session;
     std::vector<CameraInfo> cams;
 
+    session.init_output();
+
     GuiHooks hooks;
     hooks.scan_devices = [] { return adb_list_devices(); };
 
