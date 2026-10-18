@@ -105,10 +105,11 @@ jobs:
           set -euo pipefail
           mkdir -p dist/scrcpy-cam-linux
           cp build/bin/scrcpy-cam build/bin/scrcpy-server dist/scrcpy-cam-linux/
-          cp third_party/ffmpeg/lib/libavcodec.so.* \
-             third_party/ffmpeg/lib/libavutil.so.* \
-             third_party/ffmpeg/lib/libswscale.so.* \
-             third_party/ffmpeg/lib/libswresample.so.* dist/scrcpy-cam-linux/
+          # Copy by soname prefix rather than a fixed list: libavcodec pulls in
+          # swresample, and the exact .so.N versions move with the FFmpeg build.
+          for lib in libavcodec libavutil libswscale libswresample; do
+            cp third_party/ffmpeg/lib/$lib.so.* dist/scrcpy-cam-linux/
+          done
           cp README.md dist/scrcpy-cam-linux/
 
       # Verify what actually ships, not the build tree: on Linux the only way
