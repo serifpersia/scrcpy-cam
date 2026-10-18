@@ -19,6 +19,24 @@ open a webcam can use the phone's cameras.
 | Virtual camera | e2eSoft VCam SDK on Windows, v4l2loopback on Linux |
 | UI | Dear ImGui, SDL3 + OpenGL |
 
+## Releases
+
+Prebuilt archives are attached to every
+[release](https://github.com/serifpersia/scrcpy-cam/releases). The
+[`latest`](https://github.com/serifpersia/scrcpy-cam/releases/latest) tag always
+points at the newest build of `master` and is replaced on every push.
+
+| Asset | What you get |
+|---|---|
+| [`scrcpy-cam-windows.zip`](https://github.com/serifpersia/scrcpy-cam/releases/latest/download/scrcpy-cam-windows.zip) | `scrcpy-cam.exe` with its DLLs and the server |
+| [`scrcpy-cam-linux.zip`](https://github.com/serifpersia/scrcpy-cam/releases/latest/download/scrcpy-cam-linux.zip) | `scrcpy-cam` with its shared libraries and the server |
+
+Both are **Release** builds and are self-contained, so there is nothing to
+install beyond `adb` and the virtual camera driver. SHA-256 sums are published
+alongside the archives as `checksums.txt`.
+
+If you would rather build it yourself, see [Building](#building).
+
 ## Requirements
 
 - **Android platform-tools**, with `adb` on your `PATH`. scrcpy-cam shells out to
