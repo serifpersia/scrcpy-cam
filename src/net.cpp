@@ -6,10 +6,25 @@
 #else
   #include <unistd.h>
   #include <arpa/inet.h>
+  #include <sys/time.h>
   #define CLOSESOCK ::close
 #endif
 
 #include <cstring>
+
+static void set_timeouts(socket_t s, unsigned ms) {
+#ifdef _WIN32
+  DWORD t = ms;
+  setsockopt(s, SOL_SOCKET, SO_RCVTIMEO, (const char*)&t, sizeof(t));
+  setsockopt(s, SOL_SOCKET, SO_SNDTIMEO, (const char*)&t, sizeof(t));
+#else
+  timeval tv;
+  tv.tv_sec = ms / 1000;
+  tv.tv_usec = (ms % 1000) * 1000;
+  setsockopt(s, SOL_SOCKET, SO_RCVTIMEO, &tv, sizeof(tv));
+  setsockopt(s, SOL_SOCKET, SO_SNDTIMEO, &tv, sizeof(tv));
+#endif
+}
 
 bool net_init() {
   static bool started = false;
@@ -37,9 +52,7 @@ socket_t net_connect_tcp(const char* host, uint16_t port) {
     return INVALID_SOCKET_VAL;
   }
 
-  DWORD timeout_ms = 1000;
-  setsockopt(s, SOL_SOCKET, SO_RCVTIMEO, (const char*)&timeout_ms, sizeof(timeout_ms));
-  setsockopt(s, SOL_SOCKET, SO_SNDTIMEO, (const char*)&timeout_ms, sizeof(timeout_ms));
+  set_timeouts(s, 1000);
 
   if (connect(s, (sockaddr*)&addr, sizeof(addr)) != 0) {
     net_close(s);
@@ -49,9 +62,7 @@ socket_t net_connect_tcp(const char* host, uint16_t port) {
 }
 
 void net_set_timeout(socket_t s, unsigned ms) {
-  DWORD t = ms;
-  setsockopt(s, SOL_SOCKET, SO_RCVTIMEO, (const char*)&t, sizeof(t));
-  setsockopt(s, SOL_SOCKET, SO_SNDTIMEO, (const char*)&t, sizeof(t));
+  set_timeouts(s, ms);
 }
 
 bool net_send(socket_t s, const void* buf, size_t len) {
