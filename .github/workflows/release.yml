@@ -153,7 +153,9 @@ jobs:
 
       - name: Zip (Linux)
         if: matrix.name == 'linux'
-        run: cd dist && zip -r ../scrcpy-cam-linux.zip scrcpy-cam-linux
+        # -y stores the FFmpeg soname symlinks as links. Without it zip stores
+        # the file each one points at, tripling the size of libavcodec.
+        run: cd dist && zip -ry ../scrcpy-cam-linux.zip scrcpy-cam-linux
 
       - uses: actions/upload-artifact@v4
         with:
