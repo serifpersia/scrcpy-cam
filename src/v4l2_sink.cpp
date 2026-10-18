@@ -10,6 +10,7 @@
 #include <unistd.h>
 
 extern "C" {
+#include <libavutil/frame.h>
 #include <libavutil/imgutils.h>
 #include <libavutil/mem.h>
 #include <libswscale/swscale.h>
@@ -69,7 +70,7 @@ void V4L2Sink::push(const uint8_t* bgr, int w, int h, int stride, int fps) {
         configured = true;
 
         if (sws_) sws_freeContext(sws_);
-        sws_ = sws_getContext(w, h, AV_PIX_FMT_BGR24, width, height, AV_PIX_FMT_YUV420,
+        sws_ = sws_getContext(w, h, AV_PIX_FMT_BGR24, width, height, AV_PIX_FMT_YUV420P,
                               SWS_BILINEAR, nullptr, nullptr, nullptr);
         if (!sws_) {
             err_ = "sws_getContext failed";
