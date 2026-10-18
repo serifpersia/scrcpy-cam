@@ -23,7 +23,7 @@ if [[ ! -f vendor/scrcpy-server ]]; then
 fi
 
 echo "==> configuring (${BUILD_TYPE})"
-cmake -S . -B build -DCMAKE_BUILD_TYPE="$BUILD_TYPE"
+cmake -S . -B build -DCMAKE_BUILD_TYPE="$BUILD_TYPE" ${CMAKE_ARGS:-}
 
 echo "==> building"
 cmake --build build -j "$(nproc 2>/dev/null || echo 4)"

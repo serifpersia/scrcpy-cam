@@ -1,0 +1,215 @@
+name: Build and Release Latest
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [master]
+
+permissions:
+  contents: write
+
+env:
+  SDL3_URL: https://github.com/libsdl-org/SDL/releases/download/release-3.4.18/SDL3-3.4.18.tar.gz
+  FFMPEG_URL: https://github.com/BtbN/FFmpeg-Builds/releases/download/latest/ffmpeg-master-latest-linux64-lgpl-shared.tar.xz
+
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: windows-latest
+            name: windows
+          - os: ubuntu-latest
+            name: linux
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Fetch dependencies (Windows)
+        if: matrix.name == 'windows'
+        shell: pwsh
+        run: ./tools/fetch_deps.ps1
+
+      - name: Build (Windows)
+        if: matrix.name == 'windows'
+        shell: cmd
+        run: build.bat
+
+      - name: Fetch FFmpeg (Linux)
+        if: matrix.name == 'linux'
+        run: |
+          curl -sSL -o ffmpeg.tar.xz "$FFMPEG_URL"
+          mkdir -p third_party/ffmpeg
+          tar -xJf ffmpeg.tar.xz
+          mv ffmpeg-master-latest-linux64-lgpl-shared/{include,lib,bin} third_party/ffmpeg/
+
+      - name: Build SDL3 (Linux)
+        # There is no SDL3 package for Ubuntu, so build the static library once.
+        if: matrix.name == 'linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y ninja-build
+          curl -sSL -o sdl3.tar.gz "$SDL3_URL"
+          mkdir -p sdl3-src
+          tar -xzf sdl3.tar.gz -C sdl3-src --strip-components=1
+          cmake -S sdl3-src -B sdl3-build -GNinja \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DSDL_SHARED=OFF \
+            -DSDL_STATIC=ON \
+            -DSDL_TESTS=OFF \
+            -DSDL_INSTALL_TESTS=OFF
+          cmake --build sdl3-build --parallel
+          cmake --install sdl3-build --prefix "$GITHUB_WORKSPACE/third_party/sdl3"
+
+      - name: Build (Linux)
+        if: matrix.name == 'linux'
+        run: ./build.sh
+        env:
+          # The release zip carries libavcodec and friends next to the binary,
+          # so look for them there instead of in the build tree.
+          CMAKE_ARGS: -DCMAKE_BUILD_WITH_INSTALL_RPATH=ON -DCMAKE_INSTALL_RPATH=$ORIGIN
+
+      - name: Package (Windows)
+        if: matrix.name == 'windows'
+        shell: pwsh
+        run: Compress-Archive -Path build\bin\Release\* -DestinationPath scrcpy-cam-windows.zip
+
+      - name: Package (Linux)
+        if: matrix.name == 'linux'
+        run: |
+          set -euo pipefail
+          mkdir -p dist/scrcpy-cam-linux
+          cp build/bin/scrcpy-cam build/bin/scrcpy-server dist/scrcpy-cam-linux/
+          cp third_party/ffmpeg/lib/libavcodec.so.* \
+             third_party/ffmpeg/lib/libavutil.so.* \
+             third_party/ffmpeg/lib/libswscale.so.* \
+             third_party/ffmpeg/lib/libswresample.so.* dist/scrcpy-cam-linux/
+          cp README.md dist/scrcpy-cam-linux/
+
+      # Verify what actually ships, not the build tree: on Linux the only way
+      # the binary can resolve libavcodec is the copy we just placed beside it.
+      - name: Verify (Windows)
+        if: matrix.name == 'windows'
+        shell: pwsh
+        run: |
+          $dir = 'build\bin\Release'
+          $need = @('scrcpy-cam.exe', 'scrcpy-server', 'SDL3.dll')
+          foreach ($f in $need) {
+            if (-not (Test-Path (Join-Path $dir $f))) { Write-Error "missing $f"; exit 1 }
+          }
+          # The FFmpeg URL tracks "latest", so match on the name and not the version.
+          foreach ($stem in @('avcodec', 'avutil', 'swscale', 'swresample')) {
+            if (-not (Get-ChildItem $dir -Filter "$stem-*.dll" -ErrorAction SilentlyContinue)) {
+              Write-Error "missing $stem-*.dll"; exit 1
+            }
+          }
+          Write-Host 'Windows artifacts OK'
+
+      - name: Verify (Linux)
+        if: matrix.name == 'linux'
+        run: |
+          set -euo pipefail
+          test -x dist/scrcpy-cam-linux/scrcpy-cam
+          test -f dist/scrcpy-cam-linux/scrcpy-server
+          ldd dist/scrcpy-cam-linux/scrcpy-cam > ldd.txt || true
+          if grep -q "not found" ldd.txt; then
+            echo "unresolved libraries:"
+            cat ldd.txt
+            exit 1
+          fi
+          echo "Linux artifacts OK"
+
+      - name: Zip (Linux)
+        if: matrix.name == 'linux'
+        run: cd dist && zip -r ../scrcpy-cam-linux.zip scrcpy-cam-linux
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: scrcpy-cam-${{ matrix.name }}
+          path: scrcpy-cam-${{ matrix.name }}.zip
+
+  release:
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: actions/download-artifact@v4
+        with:
+          path: zips
+
+      - name: Generate release notes
+        env:
+          REPO: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+          git fetch --tags origin || true
+
+          # The previous 'latest' tag is what we diff against; a first run has none.
+          PREV=$(git rev-parse refs/tags/latest 2>/dev/null || echo "")
+          HEAD_SHA=$(git rev-parse HEAD)
+          echo "previous latest: ${PREV:-<none>}"
+          echo "current build:  $HEAD_SHA"
+
+          {
+            echo "Automatically built from the latest commit of \`master\`."
+            echo ""
+            echo "### What's changed"
+            if [ -n "$PREV" ] && [ "$PREV" != "$HEAD_SHA" ]; then
+              git log "$PREV..HEAD" --no-merges \
+                --pretty=format:"* %s ([%h](https://github.com/$REPO/commit/%H))"
+            else
+              echo "* Initial release, or no new commits since the last build."
+            fi
+            echo ""
+            echo ""
+            echo "### Windows"
+            echo '1. Download and extract `scrcpy-cam-windows.zip`'
+            echo '2. Run `scrcpy-cam.exe` — nothing to install'
+            echo '3. Install the e2eSoft Virtual Camera driver for the virtual camera output'
+            echo ""
+            echo "### Linux"
+            echo '1. Download and extract `scrcpy-cam-linux.zip`'
+            echo '2. Run `./scrcpy-cam-linux/scrcpy-cam`'
+            echo '3. Load the virtual camera device: `sudo modprobe v4l2loopback`'
+            echo ""
+            echo "### Requirements"
+            echo '`adb` must be on your PATH, and the phone must already be authorized'
+            echo '(USB debugging prompt accepted, or `adb connect` already run).'
+          } > release_notes.md
+          cat release_notes.md
+
+      # Everything below is destructive and runs only after both builds
+      # succeeded, so a failed build leaves the previous release untouched.
+      - name: Delete existing latest release
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: gh release delete latest --yes || echo "no previous 'latest' release"
+
+      - name: Recreate latest tag
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          git tag -f latest
+          git push origin latest --force
+
+      - name: Create latest release
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          : > checksums.txt
+          for z in zips/*/*.zip; do
+            sha256sum "$z" | sed 's| .*/| |' >> checksums.txt
+          done
+          cat checksums.txt
+
+          gh release create latest \
+            zips/*/*.zip \
+            checksums.txt \
+            --title latest \
+            --notes-file release_notes.md \
+            --target ${{ github.sha }}
