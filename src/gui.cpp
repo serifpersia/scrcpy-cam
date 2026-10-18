@@ -44,6 +44,9 @@ bool g_connected = false;
 
 void rebuild_fps(const std::vector<CameraInfo>& cams) {
     if (cams.empty()) { g_fps_values.clear(); return; }
+    const int prev = g_fps_values.empty()
+                         ? 0
+                         : g_fps_values[std::clamp(g_fps_index, 0, (int)g_fps_values.size() - 1)];
     const CameraInfo& c = cams[std::clamp(g_camera_index, 0, (int)cams.size() - 1)];
     const std::vector<CameraSize>& src =
         (g_high_speed && !c.high_speed_sizes.empty()) ? c.high_speed_sizes : c.sizes;
@@ -54,6 +57,14 @@ void rebuild_fps(const std::vector<CameraInfo>& cams) {
         g_fps_values = c.fps;
     }
     g_fps_index = 0;
+    // Keep the rate the user already chose when switching camera, size or high
+    // speed; only fall back to the nearest 30 when that rate is not offered.
+    for (size_t i = 0; i < g_fps_values.size(); ++i) {
+        if (g_fps_values[i] == prev) {
+            g_fps_index = (int)i;
+            return;
+        }
+    }
     if (!g_fps_values.empty()) {
         int best = g_fps_values[0];
         for (size_t i = 0; i < g_fps_values.size(); ++i) {
@@ -405,9 +416,6 @@ void draw_output_panel(Session* session) {
     ImGui::SameLine();
     if (ImGui::Checkbox("Rotate 90 CW", &rotate)) session->vcam.set_rotate(rotate ? 1 : 0);
 #endif
-
-    ImGui::Text("%d x %d @ %d fps%s", session->stream_w.load(), session->stream_h.load(),
-                session->measured_fps.load(), session->frames_flowing.load() ? "" : "  (stopped)");
 }
 
 }
