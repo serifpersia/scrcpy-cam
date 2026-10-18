@@ -15,6 +15,28 @@ open a webcam can use the phone's cameras.
 | Virtual camera | e2eSoft VCam SDK on Windows, v4l2loopback on Linux |
 | UI | Dear ImGui, SDL3 + OpenGL |
 
+## Requirements
+
+- **Android platform-tools**, with `adb` on your `PATH`. scrcpy-cam shells out to
+  `adb` and does not bundle it. If adb lives somewhere else, set the `ADB`
+  environment variable to its full path.
+- A device **already authorized** for this adb server. Check with `adb devices`:
+  a usable device shows as `device`, not `unauthorized` or `offline`.
+
+### Connecting a device
+
+**USB** — turn on Developer options and USB debugging, plug the phone in, and
+accept the "Allow USB debugging?" prompt. The device then appears by its serial
+after **Scan for adb devices**.
+
+**Network** — enable Wireless debugging, or run `adb tcpip 5555`, then
+`adb connect <ip>:5555`. You can also type the address into the `host:port` field
+and press **Connect host**. USB and network devices can be used at the same time;
+pick whichever you want from the list.
+
+The scan only shows devices adb already knows about, which is why the manual
+serial and `host:port` fields exist.
+
 ## Features
 
 - Finds cameras over adb, by scanning or by entering a serial or `host:port`
