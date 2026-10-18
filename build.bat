@@ -25,7 +25,12 @@ if not exist "vendor\scrcpy-server" (
 )
 
 echo ==^> configuring (%BUILD_TYPE%)
-cmake -S . -B build -G "Visual Studio 17 2022" -A x64 -DCMAKE_BUILD_TYPE=%BUILD_TYPE%
+REM SCRCPY_CAM_GENERATOR lets CI pick a toolchain it can actually find.
+set "GEN=%SCRCPY_CAM_GENERATOR%"
+if "%GEN%"=="" set "GEN=Visual Studio 17 2022"
+set "ARCH="
+if /I "%GEN%"=="Visual Studio 17 2022" set "ARCH=-A x64"
+cmake -S . -B build -G "%GEN%" %ARCH% -DCMAKE_BUILD_TYPE=%BUILD_TYPE%
 if errorlevel 1 exit /b 1
 
 echo ==^> building

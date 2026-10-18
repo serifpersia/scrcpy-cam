@@ -31,10 +31,18 @@ jobs:
         shell: pwsh
         run: ./tools/fetch_deps.ps1
 
+      - name: Set up MSVC (Windows)
+        # The runner image no longer exposes a Visual Studio instance to CMake,
+        # so put cl.exe on PATH and drive the build with Ninja instead.
+        if: matrix.name == 'windows'
+        uses: ilammy/msvc-dev-cmd@v1
+
       - name: Build (Windows)
         if: matrix.name == 'windows'
         shell: cmd
         run: build.bat
+        env:
+          SCRCPY_CAM_GENERATOR: Ninja
 
       - name: Fetch FFmpeg (Linux)
         if: matrix.name == 'linux'
@@ -46,10 +54,16 @@ jobs:
 
       - name: Build SDL3 (Linux)
         # There is no SDL3 package for Ubuntu, so build the static library once.
+        # The runner is headless, but SDL still needs the X11/Wayland and OpenGL
+        # headers to configure a windowing backend.
         if: matrix.name == 'linux'
         run: |
           sudo apt-get update
-          sudo apt-get install -y ninja-build
+          sudo apt-get install -y ninja-build \
+            libx11-dev libxext-dev libxrandr-dev libxcursor-dev libxi-dev \
+            libxfixes-dev libxss-dev libxkbcommon-dev libxrender-dev \
+            libwayland-dev wayland-protocols \
+            libgl1-mesa-dev libegl1-mesa-dev
           curl -sSL -o sdl3.tar.gz "$SDL3_URL"
           mkdir -p sdl3-src
           tar -xzf sdl3.tar.gz -C sdl3-src --strip-components=1
@@ -73,7 +87,7 @@ jobs:
       - name: Package (Windows)
         if: matrix.name == 'windows'
         shell: pwsh
-        run: Compress-Archive -Path build\bin\Release\* -DestinationPath scrcpy-cam-windows.zip
+        run: Compress-Archive -Path build\bin\* -DestinationPath scrcpy-cam-windows.zip
 
       - name: Package (Linux)
         if: matrix.name == 'linux'
@@ -93,7 +107,7 @@ jobs:
         if: matrix.name == 'windows'
         shell: pwsh
         run: |
-          $dir = 'build\bin\Release'
+          $dir = 'build\bin'
           $need = @('scrcpy-cam.exe', 'scrcpy-server', 'SDL3.dll')
           foreach ($f in $need) {
             if (-not (Test-Path (Join-Path $dir $f))) { Write-Error "missing $f"; exit 1 }
