@@ -179,13 +179,15 @@ void draw_device_panel(const GuiHooks& hooks, std::vector<CameraInfo>* cams) {
         ImGui::SetTooltip("Typing here overrides the dropdown above");
 
     ImGui::SetNextItemWidth(220.f);
-    if (ImGui::InputText("host:port", g_host, sizeof(g_host))) {
-        /* free text; used by the button below */
-    }
+    ImGui::InputText("host:port", g_host, sizeof(g_host));
+    if (ImGui::IsItemHovered())
+        ImGui::SetTooltip("ip:port to dial over the network, or an existing adb serial");
     ImGui::SameLine();
     if (ImGui::Button("Connect host")) {
         g_host[strcspn(g_host, " \r\n")] = '\0';
-        if (g_host[0] && hooks.connect_host(g_host)) {
+        // No colon means this is a serial adb already knows, not an address to
+        // dial: adb connect would reject it, and would fail silently here.
+        if (g_host[0] && (std::strchr(g_host, ':') || hooks.connect_host(g_host))) {
             snprintf(g_serial, sizeof(g_serial), "%s", g_host);
             g_serial_typed = true;
         }

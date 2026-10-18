@@ -34,6 +34,10 @@ after **Scan for adb devices**.
 and press **Connect host**. USB and network devices can be used at the same time;
 pick whichever you want from the list.
 
+Serial devices have no port, so both manual fields accept one: **adb serial**
+always treats what you type as a serial, and **host:port** falls back to that
+when the text has no colon. Either way the serial is passed to `adb -s`.
+
 The scan only shows devices adb already knows about, which is why the manual
 serial and `host:port` fields exist.
 
