@@ -90,9 +90,14 @@ jobs:
         if: matrix.name == 'linux'
         run: ./build.sh
         env:
-          # The release zip carries libavcodec and friends next to the binary,
-          # so look for them there instead of in the build tree.
-          CMAKE_ARGS: -DCMAKE_BUILD_WITH_INSTALL_RPATH=ON -DCMAKE_INSTALL_RPATH=$ORIGIN
+          # The release zip carries libavcodec and friends next to the binary.
+          # DT_RPATH is required rather than DT_RUNPATH: swresample is only a
+          # transitive dependency of libavcodec, and RUNPATH is not applied to
+          # transitive lookups, so it would not be found next to the binary.
+          CMAKE_ARGS: >-
+            -DCMAKE_BUILD_WITH_INSTALL_RPATH=ON
+            -DCMAKE_INSTALL_RPATH=$ORIGIN
+            -DCMAKE_EXE_LINKER_FLAGS=-Wl,--disable-new-dtags
 
       - name: Package (Windows)
         if: matrix.name == 'windows'
@@ -105,10 +110,12 @@ jobs:
           set -euo pipefail
           mkdir -p dist/scrcpy-cam-linux
           cp build/bin/scrcpy-cam build/bin/scrcpy-server dist/scrcpy-cam-linux/
-          # Take every FFmpeg shared library: libavcodec drags in swresample, and
-          # the .so.N suffixes move with each upstream build.
-          echo "shipping from:"; ls -l third_party/ffmpeg/lib/*.so*
-          cp third_party/ffmpeg/lib/*.so* dist/scrcpy-cam-linux/
+          # -a keeps the soname symlinks intact. Without it cp would dereference
+          # libavcodec.so, libavcodec.so.63 and the real file into three copies
+          # of the same 93 MB library.
+          for lib in libavcodec libavutil libswscale libswresample; do
+            cp -a third_party/ffmpeg/lib/$lib.so* dist/scrcpy-cam-linux/
+          done
           cp README.md dist/scrcpy-cam-linux/
 
       # Verify what actually ships, not the build tree: on Linux the only way
