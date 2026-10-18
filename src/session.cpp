@@ -160,11 +160,29 @@ bool Session::init_output() {
 #endif
 }
 
+void Session::shutdown_output() {
+#ifdef _WIN32
+    vcam.shutdown();
+#else
+    v4l2.shutdown();
+#endif
+}
+
+bool Session::output_ok() const {
+#ifdef _WIN32
+    return vcam.ok();
+#else
+    return v4l2.ok();
+#endif
+}
+
 bool Session::start(std::string* err) {
     if (!net_init()) {
         *err = "could not initialize sockets";
         return false;
     }
+
+    init_output();
 
     char scid[16];
     snprintf(scid, sizeof(scid), "%08x", current_pid());

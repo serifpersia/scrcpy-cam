@@ -69,6 +69,8 @@ struct Session {
     std::string output_device;
 
     bool init_output();
+    void shutdown_output();
+    bool output_ok() const;
 
     bool start(std::string* err);
     void stop();

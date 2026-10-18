@@ -19,14 +19,6 @@ int main() {
     Session session;
     std::vector<CameraInfo> cams;
 
-    if (!session.vcam.init()) {
-        fprintf(stderr,
-                "[vcam] SDK not available: the virtual camera will not be created.\n"
-                "        Install the e2eSoft VCam driver and make sure its DLL is registered.\n");
-    } else {
-        printf("[vcam] renderer ready\n");
-    }
-
     GuiHooks hooks;
     hooks.scan_devices = [] { return adb_list_devices(); };
 
@@ -74,7 +66,7 @@ int main() {
     };
 
     run_gui(&session, &cams, hooks);
-    session.vcam.shutdown();
+    session.shutdown_output();
 
 #ifdef _WIN32
     CoUninitialize();

@@ -64,7 +64,7 @@ precedence over the scanned list.
 
 ## Credits
 
-- [scrcpy](https://github.com/Genymobile/scrcpy) by Genymobile, BSD-3-Clause.
+- [scrcpy](https://github.com/Genymobile/scrcpy) by Genymobile, Apache-2.0.
   This client uses the scrcpy server, its control protocol, and the structure of
   its desktop client.
 - [Dear ImGui](https://github.com/ocornut/imgui), MIT.
@@ -106,4 +106,6 @@ int32       value, big-endian
 
 ## License
 
-scrcpy-cam is released under the same terms as scrcpy, BSD-3-Clause.
+scrcpy-cam is released under the Apache License, Version 2.0, matching scrcpy.
+See [LICENSE](LICENSE). FFmpeg and SDL3 are downloaded at build time rather
+than vendored, so they are not redistributed as part of this repository.

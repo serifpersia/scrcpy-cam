@@ -80,19 +80,20 @@ add_executable(scrcpy-cam
 
 target_include_directories(scrcpy-cam PRIVATE src ${FFMPEG_INCLUDE_DIR} ${SDL3_INCLUDE_DIR})
 target_compile_definitions(scrcpy-cam PRIVATE
-  DEFAULT_SERVER_APK="${DEFAULT_SERVER_APK}"
-  NOMINMAX WIN32_LEAN_AND_MEAN)
+  DEFAULT_SERVER_APK="${DEFAULT_SERVER_APK}")
 target_link_libraries(scrcpy-cam PRIVATE
   imgui ${AVCODEC_LIBRARY} ${SWSCALE_LIBRARY} ${AVUTIL_LIBRARY} ${SDL3_LIBRARY})
 
 # Virtual camera output: the e2eSoft SDK on Windows, v4l2loopback on Linux.
 if(WIN32)
   target_sources(scrcpy-cam PRIVATE src/vcam.cpp)
-  target_compile_definitions(scrcpy-cam PRIVATE UNICODE _UNICODE)
+  target_compile_definitions(scrcpy-cam PRIVATE UNICODE _UNICODE NOMINMAX WIN32_LEAN_AND_MEAN)
   target_link_libraries(scrcpy-cam PRIVATE ole32 oleaut32 ws2_32 opengl32)
 else()
+  find_package(OpenGL REQUIRED)
+  find_package(Threads REQUIRED)
   target_sources(scrcpy-cam PRIVATE src/v4l2_sink.cpp)
-  target_link_libraries(scrcpy-cam PRIVATE ${CMAKE_DL_LIBS} OpenGL::GL)
+  target_link_libraries(scrcpy-cam PRIVATE ${CMAKE_DL_LIBS} OpenGL::GL Threads::Threads)
 endif()
 
 # --- Copy dependencies next to the executable ------------------------------

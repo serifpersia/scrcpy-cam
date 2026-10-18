@@ -383,11 +383,16 @@ static std::string camera_label(const CameraInfo& c) {
 
 void draw_output_panel(Session* session) {
     ImGui::SeparatorText("Virtual camera output");
-    if (!session->vcam.ok()) {
+    if (!session->output_ok()) {
         ImGui::TextColored(ImVec4(1.f, 0.6f, 0.3f, 1.f),
+#ifdef _WIN32
                            "VCam SDK not available - no virtual camera will be created");
+#else
+                           "no output yet - starts when you begin streaming");
+#endif
     }
 
+#ifdef _WIN32
     bool flip_x = session->vcam.cur_mirror != 0;
     bool flip_y = session->vcam.cur_flip != 0;
     if (ImGui::Checkbox("Flip X (mirror)", &flip_x)) session->vcam.set_mirror(flip_x ? 1 : 0);
@@ -397,6 +402,7 @@ void draw_output_panel(Session* session) {
     bool rotate = session->vcam.cur_rotate != 0;
     ImGui::SameLine();
     if (ImGui::Checkbox("Rotate 90 CW", &rotate)) session->vcam.set_rotate(rotate ? 1 : 0);
+#endif
 
     ImGui::Text("%d x %d @ %d fps%s", session->stream_w.load(), session->stream_h.load(),
                 session->measured_fps.load(), session->frames_flowing.load() ? "" : "  (stopped)");
