@@ -1,0 +1,13 @@
+build/
+/dist/
+/x/
+.vs/
+.vscode/
+.idea/
+*.user
+*.suo
+cam_client_server.log
+
+# Downloaded by tools/fetch_deps.ps1, not part of the repository
+/third_party/ffmpeg/
+/third_party/sdl3/
