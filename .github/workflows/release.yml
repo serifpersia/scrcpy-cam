@@ -1,9 +1,9 @@
 name: Build and Release Latest
 
+# Manual only. Nothing builds or publishes unless you run it from the Actions
+# tab, so ordinary pushes to master never touch the 'latest' release.
 on:
   workflow_dispatch:
-  push:
-    branches: [master]
 
 permissions:
   contents: write
