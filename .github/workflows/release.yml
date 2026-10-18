@@ -180,7 +180,9 @@ jobs:
           git fetch --tags origin || true
 
           # The previous 'latest' tag is what we diff against; a first run has none.
-          PREV=$(git rev-parse refs/tags/latest 2>/dev/null || echo "")
+          # --verify --quiet prints nothing for an unknown ref. Plain rev-parse
+          # would echo the ref name itself and exit non-zero.
+          PREV=$(git rev-parse --verify --quiet refs/tags/latest || true)
           HEAD_SHA=$(git rev-parse HEAD)
           echo "previous latest: ${PREV:-<none>}"
           echo "current build:  $HEAD_SHA"
