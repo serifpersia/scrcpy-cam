@@ -8,6 +8,10 @@ distance, autofocus mode, exposure time, ISO, zoom and torch.
 Decoded frames are published as a virtual camera, so any application that can
 open a webcam can use the phone's cameras.
 
+<div align="center">
+  <img src="docs/repo_client_gui.png" alt="scrcpy-cam streaming a phone camera into the virtual camera, with manual focus, exposure and ISO controls" width="700">
+</div>
+
 | | |
 |---|---|
 | Device | Android 12 or higher (camera streaming requirement) |
