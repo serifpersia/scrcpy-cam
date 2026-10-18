@@ -68,12 +68,21 @@ jobs:
           curl -sSL -o sdl3.tar.gz "$SDL3_URL"
           mkdir -p sdl3-src
           tar -xzf sdl3.tar.gz -C sdl3-src --strip-components=1
+          # Only VIDEO/OPENGL are used directly. JOYSTICK, GAMEPAD and DIALOGS
+          # must stay on because the ImGui SDL3 backend calls SDL_GetGamepads,
+          # SDL_OpenGamepad and SDL_OpenURL unconditionally; disabling them
+          # breaks the link.
           cmake -S sdl3-src -B sdl3-build -GNinja \
             -DCMAKE_BUILD_TYPE=Release \
             -DSDL_SHARED=OFF \
             -DSDL_STATIC=ON \
             -DSDL_TESTS=OFF \
-            -DSDL_INSTALL_TESTS=OFF
+            -DSDL_INSTALL_TESTS=OFF \
+            -DSDL_EXAMPLES=OFF \
+            -DSDL_AUDIO=OFF \
+            -DSDL_CAMERA=OFF \
+            -DSDL_HAPTIC=OFF \
+            -DSDL_RENDER=OFF
           cmake --build sdl3-build --parallel
           cmake --install sdl3-build --prefix "$GITHUB_WORKSPACE/third_party/sdl3"
 
