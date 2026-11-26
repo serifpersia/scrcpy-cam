@@ -107,11 +107,19 @@ std::vector<AdbDevice> adb_list_devices() {
 }
 
 int adb_connect(const std::string& host) {
-  return adb_run("connect \"" + host + "\"");
+  std::string saved = g_serial;
+  g_serial.clear();
+  int rc = adb_run("connect \"" + host + "\"");
+  g_serial = saved;
+  return rc;
 }
 
 int adb_disconnect(const std::string& host) {
-  return host.empty() ? adb_run("disconnect") : adb_run("disconnect \"" + host + "\"");
+  std::string saved = g_serial;
+  g_serial.clear();
+  int rc = host.empty() ? adb_run("disconnect") : adb_run("disconnect \"" + host + "\"");
+  g_serial = saved;
+  return rc;
 }
 
 bool adb_push(const std::string& local, const std::string& remote) {

@@ -77,9 +77,6 @@ void V4L2Sink::push(const uint8_t* bgr, int w, int h, int stride, int fps) {
             return;
         }
 
-        // A little slack past sizeimage in case the driver under-reports. (FFmpeg's
-// AV_INPUT_BUFFER_PADDING_SIZE is gone in 8.x and is not needed here anyway:
-        // these frames go straight to the V4L2 device, not through a bitstream.)
         yuv_size_ = (size_t)sizeimage + 64;
         yuv_ = (uint8_t*)av_malloc(yuv_size_);
         if (!yuv_) {

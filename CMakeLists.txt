@@ -117,3 +117,16 @@ add_custom_target(vendor_server
   COMMAND ${CMAKE_COMMAND} -E copy_if_different
           ${DEFAULT_SERVER_APK} $<TARGET_FILE_DIR:scrcpy-cam>
   COMMENT "Copying vendor/scrcpy-server")
+
+add_custom_command(TARGET scrcpy-cam POST_BUILD
+  COMMAND ${CMAKE_COMMAND} -E make_directory $<TARGET_FILE_DIR:scrcpy-cam>/fonts
+  COMMAND ${CMAKE_COMMAND} -E copy_if_different
+          ${CMAKE_CURRENT_SOURCE_DIR}/third_party/fonts/fontawesome/fa-solid-900.ttf
+          $<TARGET_FILE_DIR:scrcpy-cam>/fonts/fa-solid-900.ttf
+  COMMAND ${CMAKE_COMMAND} -E copy_if_different
+          ${CMAKE_CURRENT_SOURCE_DIR}/third_party/fonts/inter/Inter-Regular.ttf
+          $<TARGET_FILE_DIR:scrcpy-cam>/fonts/Inter-Regular.ttf
+  COMMAND ${CMAKE_COMMAND} -E copy_if_different
+          ${CMAKE_CURRENT_SOURCE_DIR}/third_party/fonts/inter/Inter-SemiBold.ttf
+          $<TARGET_FILE_DIR:scrcpy-cam>/fonts/Inter-SemiBold.ttf
+  COMMENT "Copying fonts")

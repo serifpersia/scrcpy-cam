@@ -106,6 +106,16 @@ void run_video(Session* s) {
                 s->v4l2.push(bgr, w, h, stride, s->cfg.camera_fps ? s->cfg.camera_fps : 30);
             }
 #endif
+            if (s->preview_enabled.load()) {
+                std::lock_guard<std::mutex> lk(s->preview_mutex);
+                s->preview_rgb.resize((size_t)w * (size_t)h * 3);
+                for (int y = 0; y < h; ++y)
+                    std::memcpy(s->preview_rgb.data() + (size_t)y * w * 3,
+                                bgr + (size_t)y * stride, (size_t)w * 3);
+                s->preview_w = w;
+                s->preview_h = h;
+                ++s->preview_seq;
+            }
             s->frames_flowing = true;
         },
         [s](int w, int h, int fps) {
@@ -142,7 +152,12 @@ bool connect_with_retry(uint16_t port, const std::string& socket_name, unsigned 
 bool Session::init_output() {
 #ifdef _WIN32
     if (vcam.ok()) return true;
-    if (vcam.init()) return true;
+    if (vcam.init()) {
+        vcam.set_mirror(flip_x ? 1 : 0);
+        vcam.set_flip(flip_y ? 1 : 0);
+        vcam.set_rotate(rotate ? 1 : 0);
+        return true;
+    }
     fprintf(stderr,
             "[vcam] SDK not available: the virtual camera will not be created.\n"
             "        Install the e2eSoft VCam driver and make sure its DLL is registered.\n");
@@ -183,6 +198,10 @@ bool Session::start(std::string* err) {
     }
 
     adb_set_serial(cfg.serial);
+    if (cfg.serial.find(':') != std::string::npos && adb_connect(cfg.serial) != 0) {
+        *err = "could not connect to " + cfg.serial + " (check wireless debugging)";
+        return false;
+    }
     init_output();
 
     char scid[16];
@@ -206,7 +225,7 @@ bool Session::start(std::string* err) {
                        " scid=" + scid +
                        " log_level=debug"
                        " video_source=camera"
-                       " audio=false"  // keeps the socket order video -> control
+                       " audio=false"
                        " tunnel_forward=true";
 char buf[32];
     if (!cfg.camera_size.empty()) {
@@ -309,9 +328,34 @@ bool Session::zoom_out() {
     return net_send(control, &b, 1);
 }
 
+void Session::set_flip_x(bool on) {
+    flip_x = on;
+#ifdef _WIN32
+    vcam.set_mirror(on ? 1 : 0);
+#endif
+}
+
+void Session::set_flip_y(bool on) {
+    flip_y = on;
+#ifdef _WIN32
+    vcam.set_flip(on ? 1 : 0);
+#endif
+}
+
+void Session::set_rotate(bool on) {
+    rotate = on;
+#ifdef _WIN32
+    vcam.set_rotate(on ? 1 : 0);
+#endif
+}
+
 bool query_cameras(const std::string& serial, const std::string& server_apk,
                    std::vector<CameraInfo>* out, std::string* err) {
     adb_set_serial(serial);
+    if (serial.find(':') != std::string::npos && adb_connect(serial) != 0) {
+        *err = "could not connect to " + serial + " (check wireless debugging)";
+        return false;
+    }
     if (!adb_push(server_apk, DEVICE_SERVER_PATH)) {
         *err = "could not push the scrcpy server";
         return false;

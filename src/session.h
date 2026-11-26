@@ -1,8 +1,10 @@
 #pragma once
 #include <atomic>
 #include <cstdint>
+#include <mutex>
 #include <string>
 #include <thread>
+#include <vector>
 
 #include "cameras.h"
 #include "net.h"
@@ -61,6 +63,14 @@ struct Session {
     std::atomic<int> measured_fps{0};
     std::atomic<bool> frames_flowing{false};
 
+    std::atomic<bool> preview_enabled{false};
+    std::mutex preview_mutex;
+    std::vector<uint8_t> preview_rgb;
+    int preview_w = 0, preview_h = 0;
+    uint64_t preview_seq = 0;
+
+    bool flip_x = false, flip_y = false, rotate = false;
+
 #ifdef _WIN32
     VCamRenderer vcam;
 #else
@@ -79,6 +89,10 @@ struct Session {
     bool set_torch(bool on);
     bool zoom_in();
     bool zoom_out();
+
+    void set_flip_x(bool on);
+    void set_flip_y(bool on);
+    void set_rotate(bool on);
 };
 
 bool query_cameras(const std::string& serial, const std::string& server_apk,
