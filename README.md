@@ -71,6 +71,14 @@ serial and `host:port` fields exist.
 - Resolution, frame rate, and bitrate selection
 - Manual focus distance, AF mode and trigger, exposure time, ISO
 - Zoom and torch; flip X, flip Y and rotate on the Windows virtual camera
+- Optional mic capture (camcorder source) routed to a selectable audio output, with mute
+
+## Mic / audio
+
+Mic is off by default. Enable **Mic (camcorder)** before starting the stream; scrcpy-cam requests `audio_source=mic-camcorder` and decodes raw PCM on the client, then plays it through SDL to the selected output device. Use **Mute** to silence playback without stopping capture. The e2eSoft VCam path is video-only, so audio is routed through an audio device, not the virtual camera.
+
+- **Windows**: install a virtual audio cable (e.g. VB-CABLE or VoiceMeeter), select its input (e.g. `CABLE Input` / `Voicemeeter AUX Input`) as the scrcpy-cam output device, then in OBS/app select the matching cable output as mic/input. Keep **Mute** off in scrcpy-cam; use the cable/OBS mix if you don't want local monitoring.
+- **Linux**: route to a PipeWire/Pulse null sink or virtual device and capture its monitor in OBS/app, or use normal output device selection for local playback. For OBS-only, pick a null sink and keep system monitoring off.
 
 ## Building
 

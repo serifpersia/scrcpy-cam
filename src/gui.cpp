@@ -1,11 +1,13 @@
 #include "gui.h"
 
 #include <algorithm>
+#include <atomic>
 #include <cfloat>
 #include <cstdio>
 #include <cstring>
 #include <cstdlib>
 #include <mutex>
+#include <thread>
 #include <utility>
 
 #include "imgui.h"
@@ -41,8 +43,14 @@ int g_af_mode = 1;
 const int g_af_mode_values[] = {0, 2, 1};
 int g_ae_mode = AE_AUTO;
 bool g_torch = false;
+bool g_mic = false;
+bool g_mute_audio = false;
+int g_audio_dev_index = 0;
+std::vector<std::string> g_audio_dev_names;
+std::vector<uint32_t> g_audio_dev_ids;
 std::string g_status;
 bool g_connected = false;
+bool g_caps_loaded = false;
 bool g_quit_requested = false;
 
 bool g_show_preview = true;
@@ -82,6 +90,24 @@ void rebuild_fps(const std::vector<CameraInfo>& cams) {
     }
 }
 
+void refresh_audio_devices() {
+    g_audio_dev_names.clear();
+    g_audio_dev_ids.clear();
+    g_audio_dev_names.push_back("Default output");
+    g_audio_dev_ids.push_back(0);
+    int count = 0;
+    SDL_AudioDeviceID* devs = SDL_GetAudioPlaybackDevices(&count);
+    if (devs) {
+        for (int i = 0; i < count; ++i) {
+            const char* name = SDL_GetAudioDeviceName(devs[i]);
+            g_audio_dev_names.push_back(name ? name : "Audio device");
+            g_audio_dev_ids.push_back(devs[i]);
+        }
+        SDL_free(devs);
+    }
+    g_audio_dev_index = std::clamp(g_audio_dev_index, 0, (int)g_audio_dev_ids.size() - 1);
+}
+
 void rebuild_sizes(const std::vector<CameraInfo>& cams) {
     g_sizes.clear();
     g_size_w.clear();
@@ -113,7 +139,7 @@ SDL_Window* g_window = nullptr;
 SDL_GLContext g_gl = nullptr;
 
 bool create_window() {
-    if (!SDL_Init(SDL_INIT_VIDEO)) {
+    if (!SDL_Init(SDL_INIT_VIDEO | SDL_INIT_AUDIO)) {
         fprintf(stderr, "SDL_Init failed: %s\n", SDL_GetError());
         return false;
     }
@@ -414,6 +440,7 @@ void draw_device_panel(const GuiHooks& hooks, std::vector<CameraInfo>* cams) {
             g_camera_index = g_size_index = g_fps_index = 0;
             rebuild_sizes(*cams);
             if (!cams->empty()) seed_controls((*cams)[g_camera_index]);
+            g_caps_loaded = true;
             g_status = "capabilities loaded";
         } else {
             g_status = "capability query failed";
@@ -429,7 +456,8 @@ static std::string camera_label(const CameraInfo& c);
 
 void draw_stream_panel(const GuiHooks& hooks, Session* session,
                        const std::vector<CameraInfo>& cams) {
-    ImGui::BeginDisabled(g_connected || cams.empty());
+    const bool panel_disabled = g_connected || cams.empty();
+    ImGui::BeginDisabled(panel_disabled);
 
     static std::vector<std::string> g_camera_label_store;
     static std::vector<const char*> g_camera_labels;
@@ -447,7 +475,26 @@ void draw_stream_panel(const GuiHooks& hooks, Session* session,
         rebuild_sizes(cams);
         if (!cams.empty()) seed_controls(cams[g_camera_index]);
     }
+    ImGui::EndDisabled();
 
+    if (ImGui::Checkbox("Mic (camcorder)", &g_mic) && g_connected && session)
+        session->set_audio(g_mic, g_mute_audio, g_audio_dev_index < (int)g_audio_dev_ids.size() ? g_audio_dev_ids[g_audio_dev_index] : 0);
+    ImGui::SameLine();
+    if (ImGui::Checkbox("Mute audio", &g_mute_audio) && g_connected && session)
+        session->set_audio(g_mic, g_mute_audio, g_audio_dev_index < (int)g_audio_dev_ids.size() ? g_audio_dev_ids[g_audio_dev_index] : 0);
+
+    if (g_audio_dev_names.empty()) refresh_audio_devices();
+    if (g_mic) {
+        std::vector<const char*> dev_ptrs;
+        for (auto& n : g_audio_dev_names) dev_ptrs.push_back(n.c_str());
+        ImGui::SetNextItemWidth(-FLT_MIN);
+        int prev = g_audio_dev_index;
+        if (ImGui::Combo("##audiodev", &g_audio_dev_index, dev_ptrs.data(), (int)dev_ptrs.size()) &&
+            g_connected && session && prev != g_audio_dev_index)
+            session->set_audio_device(g_audio_dev_ids[g_audio_dev_index]);
+    }
+
+    ImGui::BeginDisabled(panel_disabled);
     std::vector<const char*> size_ptrs;
     for (auto& s : g_sizes) size_ptrs.push_back(s.c_str());
 
@@ -469,7 +516,6 @@ void draw_stream_panel(const GuiHooks& hooks, Session* session,
         ImGui::TextDisabled("FPS");
         ImGui::TableSetColumnIndex(2);
         ImGui::TextDisabled("Bitrate");
-
         ImGui::TableNextRow();
         ImGui::TableSetColumnIndex(0);
         ImGui::SetNextItemWidth(-FLT_MIN);
@@ -498,7 +544,7 @@ void draw_stream_panel(const GuiHooks& hooks, Session* session,
             snprintf(size, sizeof(size), "%dx%d", g_size_w[g_size_index], g_size_h[g_size_index]);
             int fps = g_fps_values.empty() ? 0 : g_fps_values[g_fps_index];
             int bitrate = BITRATE_PRESETS[g_bitrate_preset];
-            bool ok = hooks.start_stream(serial, cams[g_camera_index].id, size, fps, bitrate);
+            bool ok = hooks.start_stream(serial, cams[g_camera_index].id, size, fps, bitrate, g_mic, g_mute_audio, g_audio_dev_index < (int)g_audio_dev_ids.size() ? g_audio_dev_ids[g_audio_dev_index] : 0);
             g_status = ok ? "stream started" : "stream failed to start (see console)";
         }
     }
@@ -647,17 +693,7 @@ void draw_output_panel(Session* session) {
     if (ImGui::Checkbox("Rotate 90 CW", &rotate)) session->set_rotate(rotate);
 }
 
-void draw_theme_bar() {
-    std::string label = label_icon(g_dark ? 0xF185 : 0xF186,
-                                   g_dark ? "Switch to light" : "Switch to dark");
-    float w = ImGui::CalcTextSize(label.c_str()).x + ImGui::GetStyle().FramePadding.x * 2.f;
-    ImGui::SetCursorPosX(ImGui::GetCursorPosX() +
-                         std::max(0.f, ImGui::GetContentRegionAvail().x - w));
-    if (ImGui::Button(label.c_str())) {
-        g_dark = !g_dark;
-        apply_theme(g_dark);
-    }
-}
+
 
 void draw_preview_feed(Session* session) {
     if (!g_show_preview) {
@@ -738,6 +774,12 @@ void draw_preview_bar(Session* session) {
     } else {
         ImGui::TextDisabled("waiting for frames");
     }
+    ImGui::SameLine();
+    std::string label = label_icon(g_dark ? 0xF185 : 0xF186, g_dark ? "Light" : "Dark");
+    float w = ImGui::CalcTextSize(label.c_str()).x + ImGui::GetStyle().FramePadding.x * 2.f;
+    ImGui::SetCursorPosX(ImGui::GetCursorPosX() +
+                         std::max(0.f, ImGui::GetContentRegionAvail().x - w));
+    if (ImGui::Button(label.c_str())) { g_dark = !g_dark; apply_theme(g_dark); }
 }
 
 }
@@ -801,9 +843,11 @@ void run_gui(Session* session, std::vector<CameraInfo>* cams, const GuiHooks& ho
         draw_stream_panel(hooks, session, *cams);
         end_card();
 
-        begin_card("##output", 0xF390, "Virtual camera output");
-        draw_output_panel(session);
-        end_card();
+        if (!g_caps_loaded) {
+            begin_card("##output", 0xF390, "Camera output");
+            draw_output_panel(session);
+            end_card();
+        }
 
         ImGui::EndChild();
 
@@ -813,7 +857,11 @@ void run_gui(Session* session, std::vector<CameraInfo>* cams, const GuiHooks& ho
         ImGui::BeginChild("rightcol", ImVec2(0, 0), ImGuiChildFlags_None);
         ImGui::PopStyleColor();
 
-        draw_theme_bar();
+        if (g_caps_loaded) {
+            begin_card("##output", 0xF390, "Camera output");
+            draw_output_panel(session);
+            end_card();
+        }
 
         float feed_h = ImGui::GetContentRegionAvail().y - ImGui::GetFrameHeightWithSpacing();
         if (feed_h < 60.f) feed_h = 60.f;

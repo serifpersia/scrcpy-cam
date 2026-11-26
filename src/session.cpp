@@ -7,6 +7,15 @@
 
 #include "adb.h"
 
+extern "C" {
+#include <libavcodec/avcodec.h>
+#include <libavutil/channel_layout.h>
+#include <libavutil/frame.h>
+#include <libavutil/opt.h>
+#include <libavutil/samplefmt.h>
+#include <libswresample/swresample.h>
+}
+
 static const char* SERVER_VERSION = "5.0.1";
 static const char* DEVICE_SERVER_PATH = "/data/local/tmp/scrcpy-server.jar";
 
@@ -126,6 +135,103 @@ void run_video(Session* s) {
     s->frames_flowing = false;
     s->measured_fps = 0;
 }
+
+static bool recv_audio_frame(socket_t s, uint64_t* pts, std::vector<uint8_t>* data) {
+    uint8_t hdr[12];
+    if (!net_recv_full(s, hdr, sizeof(hdr))) return false;
+    uint64_t meta = ((uint64_t)hdr[0] << 56) | ((uint64_t)hdr[1] << 48) |
+                    ((uint64_t)hdr[2] << 40) | ((uint64_t)hdr[3] << 32) |
+                    ((uint64_t)hdr[4] << 24) | ((uint64_t)hdr[5] << 16) |
+                    ((uint64_t)hdr[6] << 8) | (uint64_t)hdr[7];
+    uint32_t size = ((uint32_t)hdr[8] << 24) | ((uint32_t)hdr[9] << 16) |
+                    ((uint32_t)hdr[10] << 8) | (uint32_t)hdr[11];
+    *pts = meta & ((1ULL << 62) - 1);
+    if (meta & (1ULL << 63)) {
+        data->assign(size, 0);
+        return net_recv_full(s, data->data(), size);
+    }
+    data->resize(size);
+    return net_recv_full(s, data->data(), size);
+}
+
+static void pump_audio_s16(const uint8_t* data, size_t size, SDL_AudioStream* out,
+                           std::atomic<bool>* stopping, std::atomic<bool>* mute) {
+    size_t off = 0;
+    while (off < size && !stopping->load()) {
+        size_t chunk = std::min<size_t>(size - off, 4096);
+        if (!mute->load() && out) SDL_PutAudioStreamData(out, data + off, (int)chunk);
+        off += chunk;
+    }
+}
+
+static void run_audio(Session* s) {
+    uint8_t codec_raw[4];
+    if (!net_recv_full(s->audio, codec_raw, 4)) return;
+    uint32_t codec = ((uint32_t)codec_raw[0] << 24) | ((uint32_t)codec_raw[1] << 16) |
+                     ((uint32_t)codec_raw[2] << 8) | (uint32_t)codec_raw[3];
+    net_set_timeout(s->audio, 0);
+
+    SDL_AudioSpec spec{SDL_AUDIO_S16, 2, 48000};
+    if (codec == 0x00726177) {
+        SDL_AudioDeviceID dev = s->cfg.audio_device ? s->cfg.audio_device : SDL_AUDIO_DEVICE_DEFAULT_PLAYBACK;
+        s->audio_spec = spec;
+        s->audio_out = SDL_OpenAudioDeviceStream(dev, &spec, nullptr, nullptr);
+        if (s->audio_out && !s->cfg.mute_audio) SDL_ResumeAudioStreamDevice(s->audio_out);
+        std::vector<uint8_t> pkt;
+        uint64_t pts = 0;
+        while (!s->stopping.load()) {
+            if (!recv_audio_frame(s->audio, &pts, &pkt)) break;
+            if (pkt.empty()) continue;
+            if (!s->cfg.mute_audio && s->audio_out)
+                SDL_PutAudioStreamData(s->audio_out, pkt.data(), (int)pkt.size());
+        }
+        if (s->audio_out) { SDL_DestroyAudioStream(s->audio_out); s->audio_out = nullptr; }
+        return;
+    }
+
+    const AVCodec* avc = avcodec_find_decoder(codec == 0x6F707573 ? AV_CODEC_ID_OPUS : AV_CODEC_ID_AAC);
+    if (!avc) return;
+    AVCodecContext* ctx = avcodec_alloc_context3(avc);
+    if (!ctx) return;
+    ctx->sample_rate = 48000;
+    AVChannelLayout ch = AV_CHANNEL_LAYOUT_STEREO;
+    av_channel_layout_copy(&ctx->ch_layout, &ch);
+    if (avcodec_open2(ctx, avc, nullptr) < 0) { avcodec_free_context(&ctx); return; }
+
+    SwrContext* swr = nullptr;
+    swr_alloc_set_opts2(&swr, &ch, AV_SAMPLE_FMT_S16, 48000, &ctx->ch_layout, ctx->sample_fmt,
+                        ctx->sample_rate > 0 ? ctx->sample_rate : 48000, 0, nullptr);
+    if (!swr || swr_init(swr) < 0) { if (swr) swr_free(&swr); avcodec_free_context(&ctx); return; }
+
+    SDL_AudioDeviceID dev = s->cfg.audio_device ? s->cfg.audio_device : SDL_AUDIO_DEVICE_DEFAULT_PLAYBACK;
+    s->audio_spec = spec;
+    s->audio_out = SDL_OpenAudioDeviceStream(dev, &spec, nullptr, nullptr);
+    if (s->audio_out && !s->cfg.mute_audio) SDL_ResumeAudioStreamDevice(s->audio_out);
+
+    AVPacket* pkt = av_packet_alloc();
+    AVFrame* frame = av_frame_alloc();
+    std::vector<uint8_t> data;
+    std::vector<uint8_t> pcm;
+    uint64_t pts = 0;
+    while (!s->stopping.load()) {
+        if (!recv_audio_frame(s->audio, &pts, &data)) break;
+        av_packet_unref(pkt);
+        pkt->data = data.data();
+        pkt->size = (int)data.size();
+        if (avcodec_send_packet(ctx, pkt) < 0) continue;
+        while (avcodec_receive_frame(ctx, frame) >= 0) {
+            int out_samples = (int)av_rescale_rnd(swr_get_delay(swr, ctx->sample_rate) + frame->nb_samples,
+                                                  48000, ctx->sample_rate, AV_ROUND_UP);
+            pcm.resize((size_t)out_samples * 4);
+            uint8_t* outp[] = {pcm.data()};
+            int n = swr_convert(swr, outp, out_samples, (const uint8_t**)frame->extended_data, frame->nb_samples);
+            if (n > 0 && !s->cfg.mute_audio && s->audio_out)
+                SDL_PutAudioStreamData(s->audio_out, pcm.data(), n * 4);
+        }
+    }
+    if (s->audio_out) { SDL_DestroyAudioStream(s->audio_out); s->audio_out = nullptr; }
+    av_frame_free(&frame); av_packet_free(&pkt); swr_free(&swr); avcodec_free_context(&ctx);
+}
 bool connect_with_retry(uint16_t port, const std::string& socket_name, unsigned attempts, socket_t* out, bool read_dummy) {
     for (unsigned i = 0; i < attempts; ++i) {
         socket_t sock = net_connect_tcp("127.0.0.1", port);
@@ -225,8 +331,8 @@ bool Session::start(std::string* err) {
                        " scid=" + scid +
                        " log_level=debug"
                        " video_source=camera"
-                       " audio=false"
                        " tunnel_forward=true";
+    args += cfg.mic ? " audio=true audio_source=mic-camcorder audio_codec=raw" : " audio=false";
 char buf[32];
     if (!cfg.camera_size.empty()) {
         snprintf(buf, sizeof(buf), "camera_size=%s", cfg.camera_size.c_str());
@@ -253,9 +359,18 @@ char buf[32];
         return false;
     }
 
-    if (!connect_with_retry(cfg.port, socket_name, 100, &video, true) ||
-        !connect_with_retry(cfg.port, socket_name, 100, &control, false)) {
+    if (!connect_with_retry(cfg.port, socket_name, 100, &video, true)) {
         *err = "could not connect to the scrcpy server (is the camera already in use?)";
+        stop();
+        return false;
+    }
+    if (cfg.mic && !connect_with_retry(cfg.port, socket_name, 100, &audio, false)) {
+        *err = "could not connect audio stream";
+        stop();
+        return false;
+    }
+    if (!connect_with_retry(cfg.port, socket_name, 100, &control, false)) {
+        *err = "could not connect control channel";
         stop();
         return false;
     }
@@ -272,6 +387,8 @@ char buf[32];
     stopping = false;
     connected = true;
     video_thread = std::thread(run_video, this);
+    if (cfg.mic && audio != INVALID_SOCKET_VAL)
+        audio_thread = std::thread(run_audio, this);
     return true;
 }
 
@@ -280,13 +397,19 @@ void Session::stop() {
     stopping = true;
 
     if (control != INVALID_SOCKET_VAL) net_shutdown(control);
+    if (audio != INVALID_SOCKET_VAL) net_shutdown(audio);
     if (video != INVALID_SOCKET_VAL) net_shutdown(video);
 
     if (video_thread.joinable()) video_thread.join();
+    if (audio_thread.joinable()) audio_thread.join();
 
     if (control != INVALID_SOCKET_VAL) {
         net_close(control);
         control = INVALID_SOCKET_VAL;
+    }
+    if (audio != INVALID_SOCKET_VAL) {
+        net_close(audio);
+        audio = INVALID_SOCKET_VAL;
     }
     if (video != INVALID_SOCKET_VAL) {
         net_close(video);
@@ -346,6 +469,20 @@ void Session::set_rotate(bool on) {
 #ifdef _WIN32
     vcam.set_rotate(on ? 1 : 0);
 #endif
+}
+
+void Session::set_audio(bool mic, bool mute, uint32_t device) {
+    cfg.mic = mic;
+    cfg.mute_audio = mute;
+    cfg.audio_device = device;
+    if (audio_out) {
+        if (mute) SDL_PauseAudioStreamDevice(audio_out);
+        else SDL_ResumeAudioStreamDevice(audio_out);
+    }
+}
+
+void Session::set_audio_device(uint32_t device) {
+    cfg.audio_device = device;
 }
 
 bool query_cameras(const std::string& serial, const std::string& server_apk,

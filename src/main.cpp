@@ -45,7 +45,7 @@ int main() {
     };
 
     hooks.start_stream = [&](const std::string& serial, const std::string& camera_id,
-                             const std::string& size, int fps, int bitrate) {
+                             const std::string& size, int fps, int bitrate, bool mic, bool mute, uint32_t audio_dev) {
         session.stop();
         session.cfg = SessionConfig{};
         session.cfg.serial = serial;
@@ -54,14 +54,17 @@ int main() {
         session.cfg.camera_size = size;
         session.cfg.camera_fps = fps;
         session.cfg.video_bit_rate = bitrate;
+        session.cfg.mic = mic;
+        session.cfg.mute_audio = mute;
+        session.cfg.audio_device = audio_dev;
 
         std::string err;
         if (!session.start(&err)) {
             fprintf(stderr, "[session] %s\n", err.c_str());
             return false;
         }
-        printf("[session] streaming from %s (%s, %d fps, %d bps)\n", serial.c_str(),
-               size.c_str(), fps, bitrate);
+        printf("[session] streaming from %s (%s, %d fps, %d bps, mic=%s)\n", serial.c_str(),
+               size.c_str(), fps, bitrate, mic ? "on" : "off");
         return true;
     };
 

@@ -27,12 +27,15 @@ find_library(SWSCALE_LIBRARY swscale
 find_library(AVUTIL_LIBRARY avutil
   PATHS ${CMAKE_CURRENT_SOURCE_DIR}/third_party/ffmpeg/lib ${FFMPEG_ROOT}/lib
         /usr/lib /usr/lib/x86_64-linux-gnu)
+find_library(SWRESAMPLE_LIBRARY swresample
+  PATHS ${CMAKE_CURRENT_SOURCE_DIR}/third_party/ffmpeg/lib ${FFMPEG_ROOT}/lib
+        /usr/lib /usr/lib/x86_64-linux-gnu)
 
-if(NOT FFMPEG_INCLUDE_DIR OR NOT AVCODEC_LIBRARY OR NOT SWSCALE_LIBRARY OR NOT AVUTIL_LIBRARY)
+if(NOT FFMPEG_INCLUDE_DIR OR NOT AVCODEC_LIBRARY OR NOT SWSCALE_LIBRARY OR NOT AVUTIL_LIBRARY OR NOT SWRESAMPLE_LIBRARY)
   message(FATAL_ERROR
     "FFmpeg not found.\n"
     "  Windows: powershell -ExecutionPolicy Bypass -File tools/fetch_deps.ps1\n"
-    "  Linux:   sudo apt install libavcodec-dev libswscale-dev libavutil-dev\n"
+    "  Linux:   sudo apt install libavcodec-dev libswscale-dev libavutil-dev libswresample-dev\n"
     "  or pass -DFFMPEG_ROOT=<dir>")
 endif()
 
@@ -82,7 +85,7 @@ target_include_directories(scrcpy-cam PRIVATE src ${FFMPEG_INCLUDE_DIR} ${SDL3_I
 target_compile_definitions(scrcpy-cam PRIVATE
   DEFAULT_SERVER_APK="${DEFAULT_SERVER_APK}")
 target_link_libraries(scrcpy-cam PRIVATE
-  imgui ${AVCODEC_LIBRARY} ${SWSCALE_LIBRARY} ${AVUTIL_LIBRARY} ${SDL3_LIBRARY})
+  imgui ${AVCODEC_LIBRARY} ${SWSCALE_LIBRARY} ${AVUTIL_LIBRARY} ${SWRESAMPLE_LIBRARY} ${SDL3_LIBRARY})
 
 # Virtual camera output: the e2eSoft SDK on Windows, v4l2loopback on Linux.
 if(WIN32)
