@@ -244,7 +244,6 @@ char buf[32];
         snprintf(buf, sizeof(buf), "video_bit_rate=%d", cfg.video_bit_rate);
         args += std::string(" ") + buf;
     }
-    if (cfg.high_speed) args += " camera_high_speed=true";
     if (cfg.torch) args += " camera_torch=true";
     if (cfg.zoom > 0) args += " camera_zoom=" + std::to_string(cfg.zoom);
 

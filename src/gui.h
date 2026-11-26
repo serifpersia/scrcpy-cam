@@ -11,7 +11,7 @@ struct GuiHooks {
     std::function<bool(const std::string&)> connect_host;
     std::function<bool(const std::string&)> query_caps;
     std::function<bool(const std::string& serial, const std::string& camera_id,
-                       const std::string& size, int fps, bool high_speed, int bitrate)>
+                       const std::string& size, int fps, int bitrate)>
         start_stream;
 };
 

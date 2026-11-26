@@ -68,7 +68,7 @@ serial and `host:port` fields exist.
 - Finds cameras over adb, by scanning or by entering a serial or `host:port`
 - Lists the cameras the device exposes, including the wide and telephoto lenses
   that some devices hide behind a single logical camera
-- Resolution, frame rate, bitrate and high speed capture selection
+- Resolution, frame rate, and bitrate selection
 - Manual focus distance, AF mode and trigger, exposure time, ISO
 - Zoom and torch; flip X, flip Y and rotate on the Windows virtual camera
 

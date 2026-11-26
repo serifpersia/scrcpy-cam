@@ -61,24 +61,17 @@ bool parse_camera_list(const std::string& output, std::vector<CameraInfo>* out) 
             cur->id = line.substr(idp + 12, id_end - (idp + 12));
         }
 
-        if (line.find("High speed capture") != std::string::npos) continue;
-
         if (line[0] == '-' && line.size() > 1 && line[1] == ' ') {
             if (!cur) continue;
             std::string rest = trim(line.substr(2));
             size_t x = rest.find('x');
             if (x == std::string::npos) continue;
 
-            CameraSize s;
-            s.w = atoi(rest.substr(0, x).c_str());
-            s.h = atoi(rest.substr(x + 1).c_str());
-
             size_t fp = rest.find("fps=");
-            if (fp != std::string::npos) {
-                s.high_speed = true;
-                s.fps = parse_int_set(rest.substr(fp));
-                cur->high_speed_sizes.push_back(s);
-            } else {
+            if (fp == std::string::npos) {
+                CameraSize s;
+                s.w = atoi(rest.substr(0, x).c_str());
+                s.h = atoi(rest.substr(x + 1).c_str());
                 cur->sizes.push_back(s);
             }
             continue;

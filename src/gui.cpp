@@ -27,7 +27,6 @@ char g_host[128] = "";
 int g_camera_index = 0;
 int g_size_index = 0;
 int g_fps_index = 0;
-bool g_high_speed = false;
 const int BITRATE_PRESETS[] = {1000000, 2000000, 4000000, 8000000, 16000000, 32000000};
 int g_bitrate_preset = 2;
 
@@ -64,14 +63,7 @@ void rebuild_fps(const std::vector<CameraInfo>& cams) {
                          ? 0
                          : g_fps_values[std::clamp(g_fps_index, 0, (int)g_fps_values.size() - 1)];
     const CameraInfo& c = cams[std::clamp(g_camera_index, 0, (int)cams.size() - 1)];
-    const std::vector<CameraSize>& src =
-        (g_high_speed && !c.high_speed_sizes.empty()) ? c.high_speed_sizes : c.sizes;
-    g_fps_values.clear();
-    if (g_high_speed && !src.empty() && !src[g_size_index].fps.empty()) {
-        g_fps_values = src[g_size_index].fps;
-    } else {
-        g_fps_values = c.fps;
-    }
+    g_fps_values = c.fps;
     g_fps_index = 0;
     for (size_t i = 0; i < g_fps_values.size(); ++i) {
         if (g_fps_values[i] == prev) {
@@ -96,9 +88,7 @@ void rebuild_sizes(const std::vector<CameraInfo>& cams) {
     g_size_h.clear();
     if (cams.empty()) { rebuild_fps(cams); return; }
     const CameraInfo& c = cams[std::clamp(g_camera_index, 0, (int)cams.size() - 1)];
-    const std::vector<CameraSize>& src =
-        (g_high_speed && !c.high_speed_sizes.empty()) ? c.high_speed_sizes : c.sizes;
-    for (const CameraSize& s : src) {
+    for (const CameraSize& s : c.sizes) {
         char b[64];
         snprintf(b, sizeof(b), "%dx%d", s.w, s.h);
         g_sizes.emplace_back(b);
@@ -219,7 +209,7 @@ void load_fonts(ImGuiIO& io) {
     static const ImWchar kIconRanges[] = {
         0xF011, 0xF011, 0xF021, 0xF021, 0xF030, 0xF030, 0xF03D, 0xF03D,
         0xF042, 0xF042, 0xF04B, 0xF04B, 0xF04D, 0xF04D, 0xF05B, 0xF05B,
-        0xF0C1, 0xF0C1, 0xF0E7, 0xF0E7, 0xF0EB, 0xF0EB, 0xF185, 0xF185,
+        0xF0C1, 0xF0C1, 0xF0EB, 0xF0EB, 0xF185, 0xF185,
         0xF186, 0xF186, 0xF1DE, 0xF1DE, 0xF1EB, 0xF1EB, 0xF2F1, 0xF2F1,
         0xF390, 0xF390, 0xF0C7, 0xF0C7,
         0};
@@ -449,12 +439,6 @@ void draw_stream_panel(const GuiHooks& hooks, Session* session,
     g_camera_labels.clear();
     for (auto& s : g_camera_label_store) g_camera_labels.push_back(s.c_str());
 
-    bool prev_hs = g_high_speed;
-    ImGui::Checkbox(label_icon(0xF0E7, "High speed").c_str(), &g_high_speed);
-    if (g_high_speed != prev_hs) rebuild_sizes(cams);
-    if (ImGui::IsItemHovered()) ImGui::SetTooltip("Burst capture; restricted sizes/fps");
-    ImGui::SameLine();
-
     float cam_w = ImGui::GetContentRegionAvail().x - ImGui::CalcTextSize("Camera").x
                   - ImGui::GetStyle().ItemInnerSpacing.x;
     ImGui::SetNextItemWidth(std::max(80.f, cam_w));
@@ -489,10 +473,8 @@ void draw_stream_panel(const GuiHooks& hooks, Session* session,
         ImGui::TableNextRow();
         ImGui::TableSetColumnIndex(0);
         ImGui::SetNextItemWidth(-FLT_MIN);
-        if (!g_sizes.empty() &&
-            ImGui::Combo("##res", &g_size_index, size_ptrs.data(), (int)size_ptrs.size())) {
-            if (g_high_speed) rebuild_fps(cams);
-        }
+        if (!g_sizes.empty())
+            ImGui::Combo("##res", &g_size_index, size_ptrs.data(), (int)size_ptrs.size());
         ImGui::TableSetColumnIndex(1);
         ImGui::SetNextItemWidth(-FLT_MIN);
         if (!g_fps_values.empty())
@@ -516,8 +498,7 @@ void draw_stream_panel(const GuiHooks& hooks, Session* session,
             snprintf(size, sizeof(size), "%dx%d", g_size_w[g_size_index], g_size_h[g_size_index]);
             int fps = g_fps_values.empty() ? 0 : g_fps_values[g_fps_index];
             int bitrate = BITRATE_PRESETS[g_bitrate_preset];
-            bool ok = hooks.start_stream(serial, cams[g_camera_index].id, size, fps,
-                                         g_high_speed, bitrate);
+            bool ok = hooks.start_stream(serial, cams[g_camera_index].id, size, fps, bitrate);
             g_status = ok ? "stream started" : "stream failed to start (see console)";
         }
     }

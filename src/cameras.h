@@ -4,7 +4,6 @@
 
 struct CameraSize {
     int w = 0, h = 0;
-    bool high_speed = false;
     std::vector<int> fps;
 };
 
@@ -25,7 +24,6 @@ struct CameraInfo {
     bool has_exp = false;
 
     std::vector<CameraSize> sizes;
-    std::vector<CameraSize> high_speed_sizes;
 };
 
 bool parse_camera_list(const std::string& output, std::vector<CameraInfo>* out);

@@ -38,16 +38,14 @@ int main() {
         }
         printf("[caps] %zu camera(s) on %s\n", cams.size(), serial.c_str());
         for (const CameraInfo& c : cams) {
-            printf("  camera %s %s %dx%d maxfps=%d sizes=%zu highspeed=%zu\n", c.id.c_str(),
-                   c.facing.c_str(), c.sensor_w, c.sensor_h, max_fps(c), c.sizes.size(),
-                   c.high_speed_sizes.size());
+        printf("  camera %s %s %dx%d maxfps=%d sizes=%zu\n", c.id.c_str(),
+               c.facing.c_str(), c.sensor_w, c.sensor_h, max_fps(c), c.sizes.size());
         }
         return true;
     };
 
     hooks.start_stream = [&](const std::string& serial, const std::string& camera_id,
-                             const std::string& size, int fps, bool high_speed,
-                             int bitrate) {
+                             const std::string& size, int fps, int bitrate) {
         session.stop();
         session.cfg = SessionConfig{};
         session.cfg.serial = serial;
@@ -56,7 +54,6 @@ int main() {
         session.cfg.camera_size = size;
         session.cfg.camera_fps = fps;
         session.cfg.video_bit_rate = bitrate;
-        session.cfg.high_speed = high_speed;
 
         std::string err;
         if (!session.start(&err)) {
