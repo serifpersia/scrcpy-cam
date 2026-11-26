@@ -95,6 +95,15 @@ bool net_recv_full(socket_t s, void* buf, size_t len) {
   return true;
 }
 
+void net_shutdown(socket_t s) {
+  if (s == INVALID_SOCKET_VAL) return;
+#ifdef _WIN32
+  shutdown(s, SD_BOTH);
+#else
+  shutdown(s, SHUT_RDWR);
+#endif
+}
+
 void net_close(socket_t s) {
   if (s != INVALID_SOCKET_VAL) CLOSESOCK(s);
 }

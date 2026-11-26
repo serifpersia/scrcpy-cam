@@ -61,10 +61,11 @@ int main() {
         std::string err;
         if (!session.start(&err)) {
             fprintf(stderr, "[session] %s\n", err.c_str());
-        } else {
-            printf("[session] streaming from %s (%s, %d fps, %d bps)\n", serial.c_str(),
-                   size.c_str(), fps, bitrate);
+            return false;
         }
+        printf("[session] streaming from %s (%s, %d fps, %d bps)\n", serial.c_str(),
+               size.c_str(), fps, bitrate);
+        return true;
     };
 
     run_gui(&session, &cams, hooks);

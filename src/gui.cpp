@@ -144,16 +144,15 @@ void destroy_window() {
     SDL_Quit();
 }
 
-#include <cstdio>
-#include <cstring>
-#include <cstdlib>
-
-#include "imgui.h"
-
-#include "backends/imgui_impl_opengl3.h"
-#include "backends/imgui_impl_sdl3.h"
-#include <SDL3/SDL.h>
-#include <SDL3/SDL_opengl.h>
+void seed_controls(const CameraInfo& c) {
+    if (c.has_iso) g_iso = std::clamp(g_iso, (float)c.iso_min, (float)c.iso_max);
+    if (c.has_exp) {
+        float lo = (float)c.exp_min_ns / 1e6f;
+        float hi = (float)c.exp_max_ns / 1e6f;
+        g_exposure_ms = std::clamp(g_exposure_ms, lo, hi);
+    }
+    if (c.has_focus) g_focus = std::clamp(g_focus, 0.f, std::max(0.f, c.focus_min));
+}
 
 void draw_device_panel(const GuiHooks& hooks, std::vector<CameraInfo>* cams) {
     ImGui::SeparatorText("Device");
@@ -213,6 +212,7 @@ if (ImGui::Button("Connect")) {
             if (hooks.query_caps(serial)) {
                 g_camera_index = g_size_index = g_fps_index = 0;
                 rebuild_sizes(*cams);
+                if (!cams->empty()) seed_controls((*cams)[g_camera_index]);
                 g_status = "capabilities loaded";
             } else {
                 g_status = "capability query failed";
@@ -245,6 +245,7 @@ void draw_stream_panel(const GuiHooks& hooks, Session* session,
     if (ImGui::Combo("Camera", &g_camera_index, g_camera_labels.data(),
                      (int)g_camera_labels.size())) {
         rebuild_sizes(cams);
+        if (!cams.empty()) seed_controls(cams[g_camera_index]);
     }
 
     ImGui::SameLine();
@@ -291,8 +292,9 @@ static const char* kBitrates[] = {"1 Mbps", "2 Mbps", "4 Mbps",
             snprintf(size, sizeof(size), "%dx%d", g_size_w[g_size_index], g_size_h[g_size_index]);
             int fps = g_fps_values.empty() ? 0 : g_fps_values[g_fps_index];
             int bitrate = BITRATE_PRESETS[g_bitrate_preset];
-            hooks.start_stream(serial, cams[g_camera_index].id, size, fps, g_high_speed,
-                               bitrate);
+            bool ok = hooks.start_stream(serial, cams[g_camera_index].id, size, fps,
+                                         g_high_speed, bitrate);
+            g_status = ok ? "stream started" : "stream failed to start (see console)";
         }
     }
 

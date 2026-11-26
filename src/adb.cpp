@@ -107,16 +107,16 @@ std::vector<AdbDevice> adb_list_devices() {
 }
 
 int adb_connect(const std::string& host) {
-  return adb_run("connect " + host);
+  return adb_run("connect \"" + host + "\"");
 }
 
 int adb_disconnect(const std::string& host) {
-  return host.empty() ? adb_run("disconnect") : adb_run("disconnect " + host);
+  return host.empty() ? adb_run("disconnect") : adb_run("disconnect \"" + host + "\"");
 }
 
 bool adb_push(const std::string& local, const std::string& remote) {
   printf("* adb push %s -> %s\n", local.c_str(), remote.c_str());
-  return adb_run("push \"" + local + "\" " + remote) == 0;
+  return adb_run("push \"" + local + "\" \"" + remote + "\"") == 0;
 }
 
 bool adb_forward(uint16_t port, const std::string& socket_name) {

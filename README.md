@@ -70,7 +70,7 @@ serial and `host:port` fields exist.
   that some devices hide behind a single logical camera
 - Resolution, frame rate, bitrate and high speed capture selection
 - Manual focus distance, AF mode and trigger, exposure time, ISO
-- Zoom, torch, flip X, flip Y and rotate applied to the virtual camera output
+- Zoom and torch; flip X, flip Y and rotate on the Windows virtual camera
 
 ## Building
 

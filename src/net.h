@@ -17,4 +17,5 @@ socket_t net_connect_tcp(const char* host, uint16_t port);
 void net_set_timeout(socket_t s, unsigned ms);
 bool net_send(socket_t s, const void* buf, size_t len);
 bool net_recv_full(socket_t s, void* buf, size_t len);
+void net_shutdown(socket_t s);
 void net_close(socket_t s);

@@ -182,6 +182,7 @@ bool Session::start(std::string* err) {
         return false;
     }
 
+    adb_set_serial(cfg.serial);
     init_output();
 
     char scid[16];
@@ -210,9 +211,6 @@ bool Session::start(std::string* err) {
 char buf[32];
     if (!cfg.camera_size.empty()) {
         snprintf(buf, sizeof(buf), "camera_size=%s", cfg.camera_size.c_str());
-        args += std::string(" ") + buf;
-    } else {
-        snprintf(buf, sizeof(buf), "max_size=%d", cfg.max_size);
         args += std::string(" ") + buf;
     }
     if (!cfg.camera_id.empty()) {
@@ -263,6 +261,11 @@ void Session::stop() {
     connected = false;
     stopping = true;
 
+    if (control != INVALID_SOCKET_VAL) net_shutdown(control);
+    if (video != INVALID_SOCKET_VAL) net_shutdown(video);
+
+    if (video_thread.joinable()) video_thread.join();
+
     if (control != INVALID_SOCKET_VAL) {
         net_close(control);
         control = INVALID_SOCKET_VAL;
@@ -271,7 +274,6 @@ void Session::stop() {
         net_close(video);
         video = INVALID_SOCKET_VAL;
     }
-    if (video_thread.joinable()) video_thread.join();
 
     adb_forward_remove(cfg.port);
     frames_flowing = false;

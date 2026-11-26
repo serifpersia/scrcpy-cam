@@ -21,7 +21,6 @@ struct SessionConfig {
     std::string camera_id;
     std::string camera_size;
     int camera_fps = 0;
-    int max_size = 1280;
     int video_bit_rate = 0;
     bool high_speed = false;
     bool torch = false;
