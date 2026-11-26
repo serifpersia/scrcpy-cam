@@ -1,0 +1,14 @@
+* text=auto
+
+*.png binary
+*.ttf binary
+*.otf binary
+*.exe binary
+*.dll binary
+*.lib binary
+*.a binary
+*.so binary
+*.dylib binary
+*.zip binary
+*.apk binary
+scrcpy-server binary
