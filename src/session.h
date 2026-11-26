@@ -9,6 +9,7 @@
 #include "cameras.h"
 #include "net.h"
 #include "video.h"
+#include <SDL3/SDL.h>
 
 #ifdef _WIN32
   #include "vcam.h"
@@ -24,6 +25,9 @@ struct SessionConfig {
     std::string camera_size;
     int camera_fps = 0;
     int video_bit_rate = 0;
+    bool mic = false;
+    bool mute_audio = false;
+    uint32_t audio_device = 0;
     bool torch = false;
     float zoom = 0.f;
     std::string output_device;
@@ -52,11 +56,16 @@ struct Session {
     SessionConfig cfg;
 
     socket_t video = INVALID_SOCKET_VAL;
+    socket_t audio = INVALID_SOCKET_VAL;
     socket_t control = INVALID_SOCKET_VAL;
 
     std::thread video_thread;
+    std::thread audio_thread;
     std::atomic<bool> stopping{false};
     std::atomic<bool> connected{false};
+
+    SDL_AudioStream* audio_out = nullptr;
+    SDL_AudioSpec audio_spec{};
 
     std::atomic<int> stream_w{0}, stream_h{0};
     std::atomic<int> measured_fps{0};
@@ -88,6 +97,8 @@ struct Session {
     bool set_torch(bool on);
     bool zoom_in();
     bool zoom_out();
+    void set_audio(bool mic, bool mute, uint32_t device);
+    void set_audio_device(uint32_t device);
 
     void set_flip_x(bool on);
     void set_flip_y(bool on);
